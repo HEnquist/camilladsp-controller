@@ -367,7 +367,7 @@ def parse_args():
 def get_listener(args):
     if platform.system() == "Linux" and args.device is not None:
         listener = AlsaControlListener(args.device)
-    if platform.system() == "Darwin" and args.device is not None:
+    elif platform.system() == "Darwin" and args.device is not None:
         listener = CAListener(args.device)
     else:
         listener = None
