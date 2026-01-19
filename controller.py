@@ -263,7 +263,8 @@ class AdaptConfig(CamillaConfig):
             print(f"Capture sample format is automatic, no need to change")
 
     def _change_channels(self, config, channels):
-        raise NotImplementedError("Changing channels is not implemented")
+        if config["devices"]["capture"]["channels"] != channels:
+            raise NotImplementedError("Changing channels is not implemented")
 
     def change_wave_format(self, sample_rate=None, sample_format=None, channels=None):
         # adjust base_config and store as self.config
