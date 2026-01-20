@@ -218,16 +218,19 @@ class AlsaControlListener(DeviceListener):
     def _determine_action(self):
         new_wave_format = self.read_wave_format()
         new_active = self.is_active()
-        if not self.is_active and new_active:
+        if not self._is_active and new_active:
+            logging.debug("Device became active")
             self._is_active = True
             event = DeviceEvent.STARTED
             event.set_data(deepcopy(new_wave_format))
             self._emit_event(event)
         elif self._is_active and not new_active:
+            logging.debug("Device became inactive")
             self._is_active = False
             event = DeviceEvent.STOPPED
             self._emit_event(event)
-        elif self._is_active and new_active and self.wave_format != new_wave_format:
+        elif self._is_active and new_active and self._wave_format != new_wave_format:
+            logging.debug("Device remained active but changed wave format")
             stop_event = DeviceEvent.STOPPED
             self._emit_event(stop_event)
             start_event = DeviceEvent.STARTED
@@ -248,11 +251,13 @@ class AlsaControlListener(DeviceListener):
                 self._determine_action()
 
     def run(self):
+        logging.info("Starting Alsa listener")
         self._running = True
         self._poll_thread = threading.Thread(target=self._pollingloop, daemon=True)
         self._poll_thread.start()
 
     def stop(self):
+        logging.info("Stopping Alsa listener")
         if self._running:
             self._running = False
             if self._poll_thread is not None:

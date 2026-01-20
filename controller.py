@@ -113,7 +113,7 @@ class CamillaController:
                                 "Sample rate changed, new value is unknown. Unable to get get a new config"
                             )
                 elif stop_reason == StopReason.DONE:
-                    logging.info("Capture is done, no action")
+                    logging.debug("Capture is done, no action")
                 elif stop_reason == StopReason.NONE:
                     logging.debug("Initial start")
                     if self.listener is not None:
@@ -347,6 +347,7 @@ class SpecificConfigs(CamillaConfig):
 def parse_args():
     parser = argparse.ArgumentParser(description="CamillaDSP controller")
     parser.add_argument(
+        "-l",
         "--log-level",
         help="Logging level",
         default="INFO",
