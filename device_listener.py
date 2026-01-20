@@ -15,6 +15,13 @@ class DeviceListener:
         """
         pass
 
+    def stop(self):
+        """
+        Stop listening for events from the device.
+        May do nothing if events are not supported.
+        """
+        pass
+
     def set_on_change(self, function):
         """
         Provide a callback function that gets called when some event occurs.

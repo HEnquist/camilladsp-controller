@@ -1,4 +1,5 @@
 import cffi
+import logging
 
 from datastructures import WaveFormat, DeviceEvent
 from device_listener import DeviceListener
@@ -6,7 +7,7 @@ from device_listener import DeviceListener
 try:
     from _ca_listener import ffi, lib
 except ImportError:
-    print("Compiling bindings, this will only be done on the first run.")
+    logging.info("Compiling bindings, this will only be done on the first run.")
     import ca_listener_build
 
     ca_listener_build.run_build()
@@ -91,9 +92,9 @@ class CAListener(DeviceListener):
         for id in device_ids:
             name_ptr = self._read_property(id, name_prop, "CFStringRef")
             name = self._CFString_to_str(name_ptr)
-            print(name, id)
+            logging.debug("check device %s %d", name, id)
             if name == wanted_name:
-                print("found it!", id, name)
+                logging.debug("found the device %d %s", id, name)
                 return id
         raise ValueError(f"Cannot find device with name {wanted_name}")
 
@@ -107,7 +108,7 @@ class CAListener(DeviceListener):
         if res != 0:
             raise RuntimeError(f"Unable to register listener, code: {res}")
         self.listening = True
-        print("Listening...")
+        logging.info("Listening...")
 
     def _emit_event(self, event):
         if self.on_change is not None:
@@ -122,7 +123,7 @@ class CAListener(DeviceListener):
         if res != 0:
             raise RuntimeError(f"Unable to remove listener, code: {res}")
         self.listening = False
-        print("Stopped listening")
+        logging.info("Stopped listening")
 
     def set_on_change(self, function):
         self.on_change = function
@@ -156,20 +157,21 @@ def demo(device):
     listener = CAListener(device)
 
     def dummy_callback(params):
-        print(params, params.data)
+        logging.info("got event: %s %s", params, params.data)
 
-    print(listener.read_wave_format())
+    logging.info(listener.read_wave_format())
     listener.set_on_change(dummy_callback)
     listener.run()
     try:
         while True:
             time.sleep(10)
     except KeyboardInterrupt:
-        print("Exit requested")
+        logging.info("Exit requested")
 
 
 if __name__ == "__main__":
     import sys
 
+    logging.basicConfig(level=logging.INFO)
     device = sys.argv[1]
     demo(device)

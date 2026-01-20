@@ -3,6 +3,7 @@ from copy import deepcopy
 import yaml
 import argparse
 import platform
+import logging
 from os.path import isfile
 
 from camilladsp import CamillaClient, ProcessingState, StopReason, CamillaError
@@ -70,13 +71,13 @@ class CamillaController:
             while len(self.events) > 0:
                 event = self.events.pop(0)
                 # handle each event
-                print(event)
+                logging.debug("Got event %s", event)
                 if event == DeviceEvent.STARTED:
                     wave_format = event.data
                     # re-read wave format here!
                     if self.listener is not None:
                         wave_format = listener.read_wave_format()
-                    print("Device started with wave format", wave_format)
+                    logging.info("Device started with wave format %s", wave_format)
                     self.get_config_for_new_wave_format(
                         sample_rate=wave_format.sample_rate,
                         sample_format=wave_format.sample_format,
@@ -85,22 +86,22 @@ class CamillaController:
                     self.stop_cdsp()
                     self.start_cdsp()
                 elif event == DeviceEvent.STOPPED:
-                    print("Device stopped")
+                    logging.info("Device stopped")
                     self.stop_cdsp()
 
             # Query CamillaDSP for status
             state = self.cdsp.general.state()
             if state == ProcessingState.INACTIVE:
-                # print("CamillaDSP is inactive")
+                logging.debug("CamillaDSP is inactive")
                 stop_reason = self.cdsp.general.stop_reason()
                 if stop_reason == StopReason.CAPTUREFORMATCHANGE:
                     if not self.error_on_start:
-                        print("CamillaDSP stopped because the capture format changed")
+                        logging.info("CamillaDSP stopped because the capture format changed")
                         new_rate = stop_reason.data
                         # re-read wave format here!
                         if self.listener is not None:
                             wave_format = listener.read_wave_format()
-                            print("Updated", wave_format)
+                            logging.debug("Wave format change to %s", wave_format)
                             if wave_format.sample_rate is not None:
                                 new_rate = wave_format.sample_rate
                         if new_rate > 0:
@@ -108,66 +109,69 @@ class CamillaController:
                             self.stop_cdsp()
                             self.start_cdsp()
                         else:
-                            print(
+                            logging.warning(
                                 "Sample rate changed, new value is unknown. Unable to get get a new config"
                             )
                 elif stop_reason == StopReason.DONE:
-                    print("Capture is done, no action")
+                    logging.info("Capture is done, no action")
                 elif stop_reason == StopReason.NONE:
-                    # print("Initial start")
+                    logging.debug("Initial start")
                     if self.listener is not None:
                         active = self.listener.is_active()
                         if active and not self.error_on_start:
-                            print("Device is active, starting CamillaDSP")
+                            logging.info("Device is active, starting CamillaDSP")
                             self.start_cdsp()
                     elif not self.error_on_start:
-                        print("Initial start, starting CamillaDSP")
+                        logging.info("Initial start, starting CamillaDSP")
                         self.start_cdsp()
                 elif stop_reason in (
                     StopReason.CAPTUREERROR,
                     StopReason.PLAYBACKERROR,
                 ):
                     if not self.error_on_start:
-                        print("Stopped due to error, trying to restart", stop_reason)
+                        logging.warning("Stopped due to error, trying to restart %s", stop_reason)
                         self.start_cdsp()
                 elif stop_reason == StopReason.PLAYBACKFORMATCHANGE:
-                    print("Playback format changed, ")
+                    logging.info("Playback format changed")
 
     def run(self):
         try:
             self.main_loop()
         except KeyboardInterrupt:
-            print("Shutting down...")
+            logging.info("Shutting down...")
 
     def stop_cdsp(self):
-        print("Stopping CamillaDSP")
+        logging.info("Stopping CamillaDSP")
         self.cdsp.general.stop()
         self.expected_running = False
         self.error_on_start = False
 
     def start_cdsp(self):
         if self.config is not None:
-            print("Starting CamillaDSP with new config")
+            logging.info("Starting CamillaDSP with new config")
             try:
                 self.cdsp.config.set_active(self.config)
                 self.expected_running = True
                 self.error_on_start = False
-                print("Started")
+                logging.debug("Started")
             except CamillaError as e:
-                print("Unable to start, error:", e)
+                logging.error("Unable to start, error: %s", e)
                 self.expected_running = True
                 self.error_on_start = True
         else:
-            print("No config available, ignoring start request")
+            logging.warning("No config available, ignoring start request")
 
         # else:
-        #    print("No new config is available, not starting")
+        #    logging.info("No new config is available, not starting")
 
     def get_config_for_new_wave_format(
         self, sample_rate=None, sample_format=None, channels=None
     ):
-        print(
-            f"Getting new config for rate: {sample_rate}, format: {sample_format}, channels: {channels}"
+        logging.info(
+            "Getting new config for rate: %s, format: %s, channels: %s",
+            sample_rate,
+            sample_format,
+            channels,
         )
         for provider in self.config_providers:
             try:
@@ -178,14 +182,19 @@ class CamillaController:
                 )
                 self.config = provider.get_config()
                 if self.config is not None:
-                    print(f"Using new config from {provider.name} provider")
+                    logging.info("Using new config from %s provider", provider.name)
                     return
             except Exception as e:
-                print(
-                    f"Provider {provider.name} is unable to supply a new config for this wave format"
+                logging.warning(
+                    "Provider %s is unable to supply a new config for this wave format. Error: %s",
+                    provider.name,
+                    e
                 )
-        print(
-            f"No config available for rate: {sample_rate}, format: {sample_format}, channels: {channels}"
+        logging.warning(
+            "No config available for rate: %s, format: %s, channels: %s",
+            sample_rate,
+            sample_format,
+            channels,
         )
         self.config = None
 
@@ -246,27 +255,27 @@ class AdaptConfig(CamillaConfig):
 
     def _change_sample_rate(self, config, rate):
         if config["devices"].get("resampler") is None:
-            print(f"No resampler defined, change 'samplerate' to {rate}")
+            logging.debug("No resampler defined, change 'samplerate' to %s", rate)
             config["devices"]["samplerate"] = rate
             return
 
         resampler_type = config["devices"]["resampler"]["type"]
         config["devices"]["capture_samplerate"] = rate
-        print(f"Config has a resampler, change 'capture_samplerate' to {rate}")
+        logging.debug("Config has a resampler, change 'capture_samplerate' to %s", rate)
 
         if (
             config["devices"]["capture_samplerate"] == config["devices"]["samplerate"]
             and resampler_type == "Synchronous"
         ):
-            print("No need for a 1:1 sync resampler, removing")
+            logging.debug("No need for a 1:1 sync resampler, removing")
             config["devices"]["resampler"] = None
 
     def _change_sample_format(self, config, fmt):
         if config["devices"]["capture"].get("format") is not None:
-            print(f"Change capture sample format to {fmt}")
+            logging.debug("Change capture sample format to %s", fmt)
             config["devices"]["capture"]["format"] = fmt
         else:
-            print(f"Capture sample format is automatic, no need to change")
+            logging.debug("Capture sample format is automatic, no need to change")
 
     def _change_channels(self, config, channels):
         if config["devices"]["capture"]["channels"] != channels:
@@ -331,12 +340,18 @@ class SpecificConfigs(CamillaConfig):
             self.format = sample_format
         if channels is not None:
             self.channels = channels
-        print("New config path:", self._filename())
+        logging.info("New config path: %s", self._filename())
         self.config = self.read_config(self._filename())
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="CamillaDSP controller")
+    parser.add_argument(
+        "--log-level",
+        help="Logging level",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    )
     if platform.system() in ("Linux", "Darwin"):
         parser.add_argument("-d", "--device", help="Name of capture device to monitor")
     parser.add_argument(
@@ -423,12 +438,16 @@ def get_config_providers(parser, args, wave_format=None):
 if __name__ == "__main__":
     parser, args = parse_args()
 
+    logging.basicConfig(
+        level=args.log_level, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
     listener = get_listener(args)
 
     if listener is not None:
         # Try to get the current wave format
         wave_format = listener.read_wave_format()
-        print(wave_format)
+        logging.info(wave_format)
     else:
         wave_format = None
 

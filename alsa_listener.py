@@ -2,6 +2,7 @@ import sys
 import time
 import select
 import threading
+import logging
 from copy import deepcopy
 from typing import Callable
 
@@ -127,6 +128,11 @@ class AlsaControlListener(DeviceListener):
         self._poll_thread = None
         self._wave_format = self.read_wave_format()
         self._is_active = self.is_active()
+        self._running = False
+
+    def __del__(self):
+        self.stop()
+
 
     def _find_control(self, name, interface, value_transform_func=None):
         index = self._find_element(name, interface)
@@ -165,7 +171,7 @@ class AlsaControlListener(DeviceListener):
                 and iface == interface
             ):
                 found = idx
-                print(f"Found control '{wanted_name}' with index {idx}")
+                logging.debug("Found control '%s' with index %d", wanted_name, idx)
                 break
         return found
 
@@ -177,6 +183,7 @@ class AlsaControlListener(DeviceListener):
         values = val.get_tuple(info.type, info.count)
         val.set_tuple(info.type, values)
         val.read()
+        logging.debug("Read element value %s", values)
         return values[0]
 
     def _read_control_value(self, ctl: Control | None):
@@ -233,7 +240,7 @@ class AlsaControlListener(DeviceListener):
             self._on_change(event)
 
     def _pollingloop(self):
-        while True:
+        while self._running:
             pollres = self._poller.poll()
             if pollres:
                 time.sleep(self._debounce_time)
@@ -241,19 +248,27 @@ class AlsaControlListener(DeviceListener):
                 self._determine_action()
 
     def run(self):
+        self._running = True
         self._poll_thread = threading.Thread(target=self._pollingloop, daemon=True)
         self._poll_thread.start()
+
+    def stop(self):
+        if self._running:
+            self._running = False
+            if self._poll_thread is not None:
+                self._poll_thread.join()
 
     def set_on_change(self, function):
         self._on_change = function
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     device = sys.argv[1]
     listener = AlsaControlListener(device, debounce_time=0.05)
 
     def notifier(params):
-        print(params, params.data)
+        logging.info("%s %s", params, params.data)
 
     listener.set_on_change(notifier)
     listener.run()
