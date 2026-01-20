@@ -115,7 +115,13 @@ class CamillaController:
                     print("Capture is done, no action")
                 elif stop_reason == StopReason.NONE:
                     # print("Initial start")
-                    if not self.error_on_start:
+                    if self.listener is not None:
+                        active = self.listener.is_active()
+                        if active and not self.error_on_start:
+                            print("Device is active, starting CamillaDSP")
+                            self.start_cdsp()
+                    elif not self.error_on_start:
+                        print("Initial start, starting CamillaDSP")
                         self.start_cdsp()
                 elif stop_reason in (
                     StopReason.CAPTUREERROR,

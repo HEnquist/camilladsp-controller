@@ -28,4 +28,10 @@ class DeviceListener:
         """
         return WaveFormat(channels=None, sample_format=None, sample_rate=None)
 
-
+    def is_active(self):
+        """
+        Check if the device is active, i.e. if sound is playing.
+        The default implementation returns True.
+        Override for devices that can provide this information.
+        """
+        return True

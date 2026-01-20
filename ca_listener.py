@@ -109,7 +109,7 @@ class CAListener(DeviceListener):
         self.listening = True
         print("Listening...")
 
-    def emit_event(self, event):
+    def _emit_event(self, event):
         if self.on_change is not None:
             self.on_change(event)
 
@@ -143,10 +143,10 @@ def property_listener(inObjectID, _inNumberAddresses, _inAddresses, inClientData
     self = ffi.from_handle(inClientData)
     wave_format = self.read_wave_format()
     stop_event = DeviceEvent.STOPPED
-    self.emit_event(stop_event)
+    self._emit_event(stop_event)
     start_event = DeviceEvent.STARTED
     start_event.set_data(wave_format)
-    self.emit_event(start_event)
+    self._emit_event(start_event)
     return 0
 
 
