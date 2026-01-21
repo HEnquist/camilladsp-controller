@@ -9,6 +9,11 @@ It can provide new configurations in two ways:
 by loading a specific config file for the new format,
 or by adapting a general-purpose config.
 
+## Requirements
+The following python packages are required:
+- `pycamilladsp`
+- `pyyaml`
+
 ## Configuration providers
 The controller gets the CamillaDSP configurations from config providers.
 One or more providers can be enabled at the same time.
@@ -58,6 +63,8 @@ On Linux, the controller can monitor an ALSA device for sample rate and format c
 This is useful for capturing audio from a loopback device where
 other applications can play audio with varying sample rates.
 
+The `pyalsa` package is required to use this feature.
+
 #### Example
 Start the controller to monitor the ALSA device `hw:Loopback,0`:
 ```sh
@@ -104,6 +111,9 @@ devices:
 
 ### CoreAudio (macOS)
 On macOS, the controller can monitor the sample rate of a CoreAudio device.
+
+This feature requires the `cffi` package. When first run, a small C module
+will be compiled. This requires that the XCode command line tools are installed.
 
 #### Example
 Start the controller to monitor the device "BlackHole 2ch":
