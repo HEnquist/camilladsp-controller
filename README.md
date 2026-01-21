@@ -122,7 +122,7 @@ python controller.py -p 1234 -s "/path/to/config_{samplerate}.yml" -a "/path/to/
 ```
 Here both the "Specific" and "Adapt" config providers are enabled.
 The "Specific" one is tried first.
-It will load a config for the new sample rate if a file for it exists.
+It will load a a config for the new sample rate if a file for it exists.
 If not, the "Adapt" provider will be used,
 which will modify the `config_with_resampler.yml` file.
 
@@ -178,3 +178,24 @@ devices:
 When a 44.1kHz stream is played, `capture_samplerate` is set to 44100.
 When a 96kHz stream is played, `capture_samplerate` is set to 96000,
 and the resampler is removed since it's not needed.
+
+### Windows
+There is currently no device listener for Windows.
+This is because the available loopback devices do not provide
+any public API for reading the sample rate of the playback side.
+
+A further limitation on Windows is that when the sample rate does change,
+the WASAPI audio API does not notify the client (in this case CamillaDSP)
+what the new sample rate is. It only reports that it changed.
+As a consequence of this, CamillaDSP is unable to provide the new sample rate
+in the "stop reason" message that it sends to the controller.
+This means the controller doesn't know the new rate,
+and is unable to provide a new config.
+This is a limitation in the underlying Windows API and not something that can
+be fixed in CamillaDSP.
+
+The controller can still be used on Windows.
+However, currently the only benefit of doing so is that it can try to
+restart processing if it fails with a capture or playback error.
+If the sample rate changes, CamillaDSP will stop with an error
+and be unable to continue
