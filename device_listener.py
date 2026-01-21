@@ -15,6 +15,13 @@ class DeviceListener:
         """
         pass
 
+    def stop(self):
+        """
+        Stop listening for events from the device.
+        May do nothing if events are not supported.
+        """
+        pass
+
     def set_on_change(self, function):
         """
         Provide a callback function that gets called when some event occurs.
@@ -28,4 +35,10 @@ class DeviceListener:
         """
         return WaveFormat(channels=None, sample_format=None, sample_rate=None)
 
-
+    def is_active(self):
+        """
+        Check if the device is active, i.e. if sound is playing.
+        The default implementation returns True.
+        Override for devices that can provide this information.
+        """
+        return True

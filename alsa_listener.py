@@ -2,6 +2,7 @@ import sys
 import time
 import select
 import threading
+import logging
 from copy import deepcopy
 from typing import Callable
 
@@ -102,62 +103,67 @@ class Control:
 class AlsaControlListener(DeviceListener):
     def __init__(self, device, debounce_time=0.05):
 
-        self.on_change = None
+        self._on_change = None
 
-        self.debounce_time = debounce_time
-        self.get_card_device_subdevice(device)
+        self._debounce_time = debounce_time
+        self._get_card_device_subdevice(device)
 
-        self.hctl = alsahcontrol.HControl(
+        self._hctl = alsahcontrol.HControl(
             self._card, mode=alsahcontrol.open_mode["NONBLOCK"]
         )
 
-        self.all_device_controls = self.hctl.list()
+        self._all_device_controls = self._hctl.list()
 
-        self.ctl_loopback_active = self.find_control(LOOPBACK_ACTIVE, INTERFACE_PCM)
-        self.ctl_loopback_channels = self.find_control(LOOPBACK_CHANNELS, INTERFACE_PCM)
-        self.ctl_loopback_format = self.find_control(
+        self._ctl_loopback_active = self._find_control(LOOPBACK_ACTIVE, INTERFACE_PCM)
+        self._ctl_loopback_channels = self._find_control(LOOPBACK_CHANNELS, INTERFACE_PCM)
+        self._ctl_loopback_format = self._find_control(
             LOOPBACK_FORMAT, INTERFACE_PCM, value_transform_func=SampleFormat
         )
-        self.ctl_loopback_rate = self.find_control(LOOPBACK_RATE, INTERFACE_PCM)
-        self.ctl_gadget_rate = self.find_control(GADGET_CAP_RATE, INTERFACE_PCM)
+        self._ctl_loopback_rate = self._find_control(LOOPBACK_RATE, INTERFACE_PCM)
+        self._ctl_gadget_rate = self._find_control(GADGET_CAP_RATE, INTERFACE_PCM)
 
-        self.poller = select.poll()
-        self.hctl.register_poll(self.poller)
+        self._poller = select.poll()
+        self._hctl.register_poll(self._poller)
 
-        self.poll_thread = None
-        self.wave_format = self.read_wave_format()
-        self.is_active = self.check_if_active()
+        self._poll_thread = None
+        self._wave_format = self.read_wave_format()
+        self._is_active = self.is_active()
+        self._running = False
 
-    def find_control(self, name, interface, value_transform_func=None):
-        index = self.find_element(name, interface)
+    def __del__(self):
+        self.stop()
+
+
+    def _find_control(self, name, interface, value_transform_func=None):
+        index = self._find_element(name, interface)
         if index is None:
             return None
-        element = alsahcontrol.Element(self.hctl, index)
+        element = alsahcontrol.Element(self._hctl, index)
         if element is None:
             return None
         return Control(
             index=index, element=element, value_transform_func=value_transform_func
         )
 
-    def get_card_device_subdevice(self, dev):
+    def _get_card_device_subdevice(self, dev):
         parts = dev.split(",")
         if len(parts) >= 3:
-            self.subdev_nbr = int(parts[2])
+            self._subdev_nbr = int(parts[2])
         else:
-            self.subdev_nbr = 0
+            self._subdev_nbr = 0
         if len(parts) >= 2:
-            self.device_nbr = int(parts[1])
+            self._device_nbr = int(parts[1])
         else:
-            self.device_nbr = 0
+            self._device_nbr = 0
         self._card = parts[0]
 
-    def find_element(self, wanted_name, interface, device=None, subdevice=None):
+    def _find_element(self, wanted_name, interface, device=None, subdevice=None):
         if device is None:
-            device = self.device_nbr
+            device = self._device_nbr
         if subdevice is None:
-            subdevice = self.subdev_nbr
+            subdevice = self._subdev_nbr
         found = None
-        for idx, iface, dev, subdev, name, _ in self.all_device_controls:
+        for idx, iface, dev, subdev, name, _ in self._all_device_controls:
             if (
                 name == wanted_name
                 and dev == device
@@ -165,11 +171,11 @@ class AlsaControlListener(DeviceListener):
                 and iface == interface
             ):
                 found = idx
-                print(f"Found control '{wanted_name}' with index {idx}")
+                logging.debug("Found control '%s' with index %d", wanted_name, idx)
                 break
         return found
 
-    def read_element_value(self, elem):
+    def _read_element_value(self, elem):
         if elem is None:
             return None
         info = alsahcontrol.Info(elem)
@@ -177,27 +183,28 @@ class AlsaControlListener(DeviceListener):
         values = val.get_tuple(info.type, info.count)
         val.set_tuple(info.type, values)
         val.read()
+        logging.debug("Read element value %s", values)
         return values[0]
 
-    def read_control_value(self, ctl: Control | None):
+    def _read_control_value(self, ctl: Control | None):
         if ctl is None:
             return None
-        value = self.read_element_value(ctl.element)
+        value = self._read_element_value(ctl.element)
         if ctl.value_transform_func is not None:
             return ctl.value_transform_func(value)
         return value
 
-    def check_if_active(self):
-        gadget_rate = self.read_control_value(self.ctl_gadget_rate)
+    def is_active(self):
+        gadget_rate = self._read_control_value(self._ctl_gadget_rate)
         if gadget_rate is not None:
             return gadget_rate > 0
-        return self.read_control_value(self.ctl_loopback_active)
+        return self._read_control_value(self._ctl_loopback_active)
 
     def read_wave_format(self):
-        loopback_rate = self.read_control_value(self.ctl_loopback_rate)
-        loopback_channels = self.read_control_value(self.ctl_loopback_channels)
-        loopback_format = self.read_control_value(self.ctl_loopback_format)
-        gadget_rate = self.read_control_value(self.ctl_gadget_rate)
+        loopback_rate = self._read_control_value(self._ctl_loopback_rate)
+        loopback_channels = self._read_control_value(self._ctl_loopback_channels)
+        loopback_format = self._read_control_value(self._ctl_loopback_format)
+        gadget_rate = self._read_control_value(self._ctl_gadget_rate)
         if gadget_rate is not None:
             return WaveFormat(
                 sample_format=None, channels=None, sample_rate=gadget_rate
@@ -208,52 +215,65 @@ class AlsaControlListener(DeviceListener):
             sample_rate=loopback_rate,
         )
 
-    def determine_action(self):
+    def _determine_action(self):
         new_wave_format = self.read_wave_format()
-        new_active = self.check_if_active()
-        if not self.is_active and new_active:
-            self.is_active = True
+        new_active = self.is_active()
+        if not self._is_active and new_active:
+            logging.debug("Device became active")
+            self._is_active = True
             event = DeviceEvent.STARTED
             event.set_data(deepcopy(new_wave_format))
-            self.emit_event(event)
-        elif self.is_active and not new_active:
-            self.is_active = False
+            self._emit_event(event)
+        elif self._is_active and not new_active:
+            logging.debug("Device became inactive")
+            self._is_active = False
             event = DeviceEvent.STOPPED
-            self.emit_event(event)
-        elif self.is_active and new_active and self.wave_format != new_wave_format:
+            self._emit_event(event)
+        elif self._is_active and new_active and self._wave_format != new_wave_format:
+            logging.debug("Device remained active but changed wave format")
             stop_event = DeviceEvent.STOPPED
-            self.emit_event(stop_event)
+            self._emit_event(stop_event)
             start_event = DeviceEvent.STARTED
             start_event.set_data(deepcopy(new_wave_format))
-            self.emit_event(start_event)
-        self.wave_format = new_wave_format
+            self._emit_event(start_event)
+        self._wave_format = new_wave_format
 
-    def emit_event(self, event):
-        if self.on_change is not None:
-            self.on_change(event)
+    def _emit_event(self, event):
+        if self._on_change is not None:
+            self._on_change(event)
 
-    def pollingloop(self):
-        while True:
-            pollres = self.poller.poll()
+    def _pollingloop(self):
+        while self._running:
+            pollres = self._poller.poll()
             if pollres:
-                time.sleep(self.debounce_time)
-                self.hctl.handle_events()
-                self.determine_action()
+                time.sleep(self._debounce_time)
+                self._hctl.handle_events()
+                self._determine_action()
 
     def run(self):
-        self.poll_thread = threading.Thread(target=self.pollingloop, daemon=True)
-        self.poll_thread.start()
+        logging.info("Starting Alsa listener")
+        self._running = True
+        self._poll_thread = threading.Thread(target=self._pollingloop, daemon=True)
+        self._poll_thread.start()
+
+    def stop(self):
+        logging.info("Stopping Alsa listener")
+        if self._running:
+            self._running = False
+            if self._poll_thread is not None:
+                self._poll_thread.join()
 
     def set_on_change(self, function):
-        self.on_change = function
+        self._on_change = function
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     device = sys.argv[1]
-    listener = ControlListener(device, debounce_time=0.05)
+    listener = AlsaControlListener(device, debounce_time=0.05)
 
     def notifier(params):
-        print(params, params.data)
+        logging.info("%s %s", params, params.data)
 
     listener.set_on_change(notifier)
     listener.run()
