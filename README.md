@@ -9,10 +9,20 @@ It can provide new configurations in two ways:
 by loading a specific config file for the new format,
 or by adapting a general-purpose config.
 
+## Supported CamillaDSP version
+This version of the controller works with CamillaDSP v4.0 and later.
+
 ## Requirements
 The following python packages are required:
 - `pycamilladsp`
 - `pyyaml`
+
+### Platform-specific dependencies
+- **Linux (ALSA listener)**: The controller relies on `pyalsa`
+  when monitoring ALSA devices.
+- **macOS (CoreAudio listener)**: The controller uses `cffi` to compile
+  a small helper module and requires the Xcode command line tools
+  for that build step.
 
 ## Configuration providers
 The controller gets the CamillaDSP configurations from config providers.
@@ -85,7 +95,7 @@ devices:
     type: Alsa
     channels: 2
     device: "hw:Loopback,0"
-    format: S32LE
+    format: S32_LE
   playback:
     type: Alsa
     channels: 2
@@ -102,7 +112,7 @@ devices:
     type: Alsa
     channels: 2
     device: "hw:Loopback,0"
-    format: S32LE
+    format: S32_LE
   playback:
     type: Alsa
     channels: 2
