@@ -80,17 +80,17 @@ class SampleFormat(Enum):
 
 def alsa_format_to_cdsp(fmt):
     if fmt == SampleFormat.S16_LE:
-        return "S16LE"
+        return "S16_LE"
     if fmt == SampleFormat.S24_3LE:
-        return "S24LE3"
+        return "S24_3_LE"
     if fmt == SampleFormat.S24_LE:
-        return "S24LE"
+        return "S24_4_RJ_LE"
     if fmt == SampleFormat.S32_LE:
-        return "S32LE"
+        return "S32_LE"
     if fmt == SampleFormat.FLOAT_LE:
-        return "FLOAT32LE"
+        return "F32_LE"
     if fmt == SampleFormat.FLOAT64_LE:
-        return "FLOAT64LE"
+        return "F64_LE"
 
 
 @dataclass
